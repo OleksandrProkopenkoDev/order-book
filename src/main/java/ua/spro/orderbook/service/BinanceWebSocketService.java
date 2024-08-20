@@ -1,11 +1,13 @@
 package ua.spro.orderbook.service;
 
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
+@Slf4j
 @Service
 public class BinanceWebSocketService extends TextWebSocketHandler {
 
@@ -19,6 +21,7 @@ public class BinanceWebSocketService extends TextWebSocketHandler {
   @Override
   public void handleTextMessage(WebSocketSession session, TextMessage message) {
     String payload = message.getPayload();
+    log.info("Received text message: {}", payload);
     // Pass the WebSocket message to the OrderBookService for processing
     orderBookService.updateOrderBookFromWebSocket(payload);
   }

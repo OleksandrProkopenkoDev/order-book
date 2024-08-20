@@ -1,18 +1,23 @@
 package ua.spro.orderbook.service;
 
-import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestTemplate;
-
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
 import ua.spro.orderbook.model.OrderBook;
 
+@Slf4j
 @Service
 public class OrderBookService {
 
-  private static final String ORDER_BOOK_URL = "https://dapi.binance.com/dapi/v1/depth?symbol=BTCUSD_PERP&limit=1000";
+  private static final String ORDER_BOOK_URL =
+      "https://dapi.binance.com/dapi/v1/depth?symbol=BTCUSD_PERP&limit=1000";
   private final OrderBook orderBook = new OrderBook();
   private final RestTemplate restTemplate = new RestTemplate();
+  private final ObjectMapper objectMapper = new ObjectMapper();
 
   public OrderBook getOrderBook() {
     return orderBook;
@@ -38,12 +43,15 @@ public class OrderBookService {
       double quantity = Double.parseDouble(ask.get(1));
       orderBook.updateOrder(false, price, quantity);
     }
+    log.info("Order book snapshot: {}", orderBook);
   }
 
   // Update the order book with a WebSocket message
   public void updateOrderBookFromWebSocket(String message) {
+    log.info("Update order book from socket: {}", message);
     // Parse the WebSocket message (assumed to be JSON)
-    // Example: {"b": [["price1", "quantity1"], ["price2", "quantity2"]], "a": [["price1", "quantity1"], ...]}
+    // Example: {"b": [["price1", "quantity1"], ["price2", "quantity2"]], "a": [["price1",
+    // "quantity1"], ...]}
     Map<String, Object> updates = parseWebSocketMessage(message);
 
     // Process bids (b)
@@ -61,12 +69,15 @@ public class OrderBookService {
       double quantity = Double.parseDouble(ask.get(1));
       orderBook.updateOrder(false, price, quantity);
     }
+    log.info("Updated order book from socket: {}", orderBook);
   }
 
   private Map<String, Object> parseWebSocketMessage(String message) {
-    // You can use Jackson ObjectMapper or other JSON parsers to parse the message
-    // For simplicity, returning an empty map here
-    return Map.of(); // Replace with actual JSON parsing logic
+    try {
+      return objectMapper.readValue(message, Map.class);
+    } catch (IOException e) {
+      log.error("Failed to parse WebSocket message: {}", message, e);
+      return Map.of(); // Return an empty map in case of parsing failure
+    }
   }
 }
-

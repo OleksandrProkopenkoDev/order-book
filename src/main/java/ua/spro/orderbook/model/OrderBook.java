@@ -40,5 +40,13 @@ public class OrderBook {
     bids.clear();
     asks.clear();
   }
+
+  @Override
+  public String toString() {
+    return "OrderBook{" +
+        "asks=" + asks +
+        ", bids=" + bids +
+        '}';
+  }
 }
 
