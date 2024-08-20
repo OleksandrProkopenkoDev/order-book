@@ -28,48 +28,53 @@ public class OrderBookService {
     orderBook.clear();
     Map<String, Object> snapshot = restTemplate.getForObject(ORDER_BOOK_URL, Map.class);
 
-    // Process bids
-    List<List<String>> bids = (List<List<String>>) snapshot.get("bids");
-    for (List<String> bid : bids) {
-      double price = Double.parseDouble(bid.get(0));
-      double quantity = Double.parseDouble(bid.get(1));
-      orderBook.updateOrder(true, price, quantity);
-    }
+    if (snapshot != null) {
+      // Process bids
+      List<List<String>> bids = (List<List<String>>) snapshot.get("bids");
+      processBids(bids);
 
-    // Process asks
-    List<List<String>> asks = (List<List<String>>) snapshot.get("asks");
-    for (List<String> ask : asks) {
-      double price = Double.parseDouble(ask.get(0));
-      double quantity = Double.parseDouble(ask.get(1));
-      orderBook.updateOrder(false, price, quantity);
+      // Process asks
+      List<List<String>> asks = (List<List<String>>) snapshot.get("asks");
+      processAsks(asks);
+      log.info("Order book snapshot: {}", orderBook);
+    } else {
+      log.error("Failed to retrieve order book snapshot.");
     }
-    log.info("Order book snapshot: {}", orderBook);
   }
 
   // Update the order book with a WebSocket message
   public void updateOrderBookFromWebSocket(String message) {
-    log.info("Update order book from socket: {}", message);
     // Parse the WebSocket message (assumed to be JSON)
-    // Example: {"b": [["price1", "quantity1"], ["price2", "quantity2"]], "a": [["price1",
-    // "quantity1"], ...]}
     Map<String, Object> updates = parseWebSocketMessage(message);
 
     // Process bids (b)
     List<List<String>> bids = (List<List<String>>) updates.get("b");
-    for (List<String> bid : bids) {
-      double price = Double.parseDouble(bid.get(0));
-      double quantity = Double.parseDouble(bid.get(1));
-      orderBook.updateOrder(true, price, quantity);
-    }
+    processBids(bids);
 
     // Process asks (a)
     List<List<String>> asks = (List<List<String>>) updates.get("a");
-    for (List<String> ask : asks) {
-      double price = Double.parseDouble(ask.get(0));
-      double quantity = Double.parseDouble(ask.get(1));
-      orderBook.updateOrder(false, price, quantity);
-    }
+    processAsks(asks);
     log.info("Updated order book from socket: {}", orderBook);
+  }
+
+  private void processAsks(List<List<String>> asks) {
+    if (asks != null) {
+      for (List<String> ask : asks) {
+        double price = Double.parseDouble(ask.get(0));
+        double quantity = Double.parseDouble(ask.get(1));
+        orderBook.updateOrder(false, price, quantity);
+      }
+    }
+  }
+
+  private void processBids(List<List<String>> bids) {
+    if (bids != null) {
+      for (List<String> bid : bids) {
+        double price = Double.parseDouble(bid.get(0));
+        double quantity = Double.parseDouble(bid.get(1));
+        orderBook.updateOrder(true, price, quantity);
+      }
+    }
   }
 
   private Map<String, Object> parseWebSocketMessage(String message) {

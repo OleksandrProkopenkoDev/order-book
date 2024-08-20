@@ -26,9 +26,9 @@ public class OrderBookApplication {
   @Bean
   CommandLineRunner run() {
     return (args) -> {
-      log.info("Initializing Order Book...");
-      orderBookService.initializeOrderBook();
-      log.info("Order Book initialized.");
+//      log.info("Initializing Order Book...");
+//      orderBookService.initializeOrderBook();
+//      log.info("Order Book initialized.");
     };
   }
 }
