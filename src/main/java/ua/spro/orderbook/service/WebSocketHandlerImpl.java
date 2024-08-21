@@ -35,14 +35,12 @@ public class WebSocketHandlerImpl implements WebSocketHandler {
   public void handleMessage(
       @NonNull WebSocketSession session, @NonNull WebSocketMessage<?> message) {
     try {
-      // Parse the incoming message
       JsonNode jsonNode = objectMapper.readTree((String) message.getPayload());
 
       // Check the event type field
       if (jsonNode.has("e") && "depthUpdate".equals(jsonNode.get("e").asText())) {
-        handleDepthUpdate(jsonNode);
-      } else if (jsonNode.has("result")) {
-        handleSubscriptionConfirmation(jsonNode);
+        log.info("Received depth update: {}", jsonNode);
+        orderBookService.updateOrderBookFromWebSocket(jsonNode);
       } else {
         log.warn("Received unexpected message: {}", message);
       }
@@ -65,14 +63,5 @@ public class WebSocketHandlerImpl implements WebSocketHandler {
   @Override
   public boolean supportsPartialMessages() {
     return false;
-  }
-
-  private void handleDepthUpdate(JsonNode jsonNode) {
-    log.info("Received depth update: {}", jsonNode.toString());
-    orderBookService.updateOrderBookFromWebSocket(jsonNode);
-  }
-
-  private void handleSubscriptionConfirmation(JsonNode jsonNode) {
-    log.info("Subscription confirmed: {}", jsonNode.toString());
   }
 }

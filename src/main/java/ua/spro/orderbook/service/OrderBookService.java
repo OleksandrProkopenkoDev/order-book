@@ -3,6 +3,7 @@ package ua.spro.orderbook.service;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -24,6 +25,8 @@ public class OrderBookService {
 
   private static final String ORDER_BOOK_URL =
       "https://dapi.binance.com/dapi/v1/depth?symbol=BTCUSD_PERP&limit=1000";
+  public static final String BID = "bid";
+  public static final String ASK = "ask";
   private final RestTemplate restTemplate = new RestTemplate();
   private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -38,16 +41,9 @@ public class OrderBookService {
   public OrderBookResponse getLatestOrderBook() {
     return latestOrderBook;
   }
-
-  // Initialize the order book with a snapshot from the API
+  
   public void initializeOrderBook() {
-    ResponseEntity<OrderBookResponse> response =
-        restTemplate.exchange(
-            ORDER_BOOK_URL,
-            HttpMethod.GET,
-            HttpEntity.EMPTY,
-            new ParameterizedTypeReference<>() {});
-    OrderBookResponse snapshot = response.getBody();
+    OrderBookResponse snapshot = getFromBinance();
     if (snapshot != null) {
       lastUpdateId = snapshot.lastUpdateId();
       previousUpdateId = 0;
@@ -68,7 +64,6 @@ public class OrderBookService {
 
       // Convert the map to list of lists using streams
       List<List<String>> bidsList = getBidsListFromMap();
-
       List<List<String>> asksList = getAsksListFromMap();
 
       JsonNode bidsNode = objectMapper.valueToTree(bidsList);
@@ -87,11 +82,7 @@ public class OrderBookService {
     }
   }
 
-  private List<List<String>> convertJsonNodeToListOfLists(JsonNode jsonNode) {
-    return objectMapper.convertValue(jsonNode, new TypeReference<>() {});
-  }
 
-  // Update the order book with a WebSocket message
   public void updateOrderBookFromWebSocket(JsonNode root) {
     try {
       long u = root.get("u").asLong();
@@ -99,19 +90,19 @@ public class OrderBookService {
       long pu = root.get("pu").asLong();
 
       if (u < lastUpdateId) {
-        log.info("u({}) < lastUpdateId({})", u, lastUpdateId);
+        log.debug("u({}) < lastUpdateId({})", u, lastUpdateId);
         return;
       }
 
       if (previousUpdateId != 0 && pu != previousUpdateId) {
-        log.info("pu({}) != previousUpdateId({})", pu, previousUpdateId);
+        log.debug("pu({}) != previousUpdateId({})", pu, previousUpdateId);
         initializeOrderBook();
         return;
       }
 
       if (previousUpdateId == 0) {
         if (U <= lastUpdateId) {
-          log.info("U({}) <= lastUpdateId({})", U, lastUpdateId);
+          log.debug("U({}) <= lastUpdateId({})", U, lastUpdateId);
           processEvent(root);
         }
         return;
@@ -121,7 +112,11 @@ public class OrderBookService {
       log.error("Failed to update order book", e);
     }
   }
-
+  
+  private List<List<String>> convertJsonNodeToListOfLists(JsonNode jsonNode) {
+    return objectMapper.convertValue(jsonNode, new TypeReference<>() {});
+  }
+  
   private void processEvent(JsonNode root) {
     try {
       String symbol = root.get("s").asText();
@@ -133,8 +128,8 @@ public class OrderBookService {
       JsonNode bids = root.get("b");
       JsonNode asks = root.get("a");
 
-      updateOrderBookLevels(bids, "bid");
-      updateOrderBookLevels(asks, "ask");
+      updateOrderBookLevels(bids, BID);
+      updateOrderBookLevels(asks, ASK);
 
       // Convert the map to list of lists
       List<List<String>> bidsList = getBidsListFromMap();
@@ -153,14 +148,16 @@ public class OrderBookService {
     }
   }
 
-  private List<List<String>> getAsksListFromMap() {
-    return asksMap.entrySet().stream()
+  private List<List<String>> getBidsListFromMap() {
+    return bidsMap.entrySet().stream()
+        .sorted((entry1, entry2) -> Double.compare(Double.parseDouble(entry2.getKey()), Double.parseDouble(entry1.getKey())))
         .map(entry -> List.of(entry.getKey(), entry.getValue()))
         .collect(Collectors.toList());
   }
 
-  private List<List<String>> getBidsListFromMap() {
-    return bidsMap.entrySet().stream()
+  private List<List<String>> getAsksListFromMap() {
+    return asksMap.entrySet().stream()
+        .sorted(Comparator.comparingDouble(entry -> Double.parseDouble(entry.getKey())))
         .map(entry -> List.of(entry.getKey(), entry.getValue()))
         .collect(Collectors.toList());
   }
@@ -179,9 +176,8 @@ public class OrderBookService {
         });
   }
 
-  // Remove a level from the order book
   private void removeOrderBookLevel(String price, String type) {
-    if (type.equals("bid")) {
+    if (type.equals(BID)) {
       bidsMap.remove(price);
     } else {
       asksMap.remove(price);
@@ -189,13 +185,24 @@ public class OrderBookService {
     log.debug("Removed {} level at price: {}", type, price);
   }
 
-  // Update a level in the order book
+  
   private void updateOrderBookLevel(String price, String quantity, String type) {
-    if (type.equals("bid")) {
+    if (type.equals(BID)) {
       bidsMap.put(price, quantity);
     } else {
       asksMap.put(price, quantity);
     }
     log.debug("Updated {} level at price: {}, quantity: {}", type, price, quantity);
+  }
+
+
+  private OrderBookResponse getFromBinance() {
+    ResponseEntity<OrderBookResponse> response =
+        restTemplate.exchange(
+            ORDER_BOOK_URL,
+            HttpMethod.GET,
+            HttpEntity.EMPTY,
+            new ParameterizedTypeReference<>() {});
+    return response.getBody();
   }
 }
