@@ -1,25 +1,25 @@
 package ua.spro.orderbook.config;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.socket.config.annotation.EnableWebSocket;
 import org.springframework.web.socket.config.annotation.WebSocketConfigurer;
 import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistry;
-import ua.spro.orderbook.service.WebSocketService;
+import ua.spro.orderbook.service.WebSocketHandlerImpl;
 
 @Configuration
 @EnableWebSocket
 public class WebSocketConfig implements WebSocketConfigurer {
 
-  private final WebSocketService webSocketService;
+  private final WebSocketHandlerImpl webSocketHandler;
 
-  // Constructor injection for WebSocketService
-  public WebSocketConfig(WebSocketService webSocketService) {
-    this.webSocketService = webSocketService;
+  @Autowired
+  public WebSocketConfig(WebSocketHandlerImpl webSocketHandler) {
+    this.webSocketHandler = webSocketHandler;
   }
 
   @Override
   public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
-    registry.addHandler(webSocketService, "/binance").setAllowedOrigins("*");
+    registry.addHandler(webSocketHandler, "/binance").setAllowedOrigins("*");
   }
 }
-
