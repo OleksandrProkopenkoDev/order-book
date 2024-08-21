@@ -4,22 +4,22 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.web.socket.config.annotation.EnableWebSocket;
 import org.springframework.web.socket.config.annotation.WebSocketConfigurer;
 import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistry;
-import ua.spro.orderbook.service.BinanceWebSocketService;
+import ua.spro.orderbook.service.WebSocketService;
 
 @Configuration
 @EnableWebSocket
 public class WebSocketConfig implements WebSocketConfigurer {
 
-  private final BinanceWebSocketService binanceWebSocketService;
+  private final WebSocketService webSocketService;
 
-  // Constructor injection for BinanceWebSocketService
-  public WebSocketConfig(BinanceWebSocketService binanceWebSocketService) {
-    this.binanceWebSocketService = binanceWebSocketService;
+  // Constructor injection for WebSocketService
+  public WebSocketConfig(WebSocketService webSocketService) {
+    this.webSocketService = webSocketService;
   }
 
   @Override
   public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
-    registry.addHandler(binanceWebSocketService, "/binance").setAllowedOrigins("*");
+    registry.addHandler(webSocketService, "/binance").setAllowedOrigins("*");
   }
 }
 
