@@ -15,7 +15,9 @@ public class WebSocketBeanConfig {
   public WebSocketHandlerImpl webSocketHandlerImpl(
       OrderBookService orderBookService,
       ObjectMapper objectMapper,
+      @Lazy WebSocketConfig webSocketConfig,
       @Lazy WebSocketService webSocketService) {
-    return new WebSocketHandlerImpl(orderBookService, objectMapper, webSocketService::connect);
+    return new WebSocketHandlerImpl(
+        orderBookService, objectMapper, webSocketConfig, webSocketService::connect);
   }
 }

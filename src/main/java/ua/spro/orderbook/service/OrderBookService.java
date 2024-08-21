@@ -10,12 +10,15 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
+import ua.spro.orderbook.config.WebSocketConfig;
 import ua.spro.orderbook.model.OrderBookResponse;
 
 @Service
@@ -23,8 +26,6 @@ public class OrderBookService {
 
   private static final Logger log = LoggerFactory.getLogger(OrderBookService.class);
 
-  private static final String ORDER_BOOK_URL =
-      "https://dapi.binance.com/dapi/v1/depth?symbol=BTCUSD_PERP&limit=1000";
   public static final String BID = "bid";
   public static final String ASK = "ask";
   private final RestTemplate restTemplate = new RestTemplate();
@@ -37,6 +38,12 @@ public class OrderBookService {
   // Maps to store bids and asks, using price as the key and quantity as the value
   private final Map<String, String> bidsMap = new HashMap<>();
   private final Map<String, String> asksMap = new HashMap<>();
+
+  private final WebSocketConfig webSocketConfig;
+
+  public OrderBookService(@Lazy WebSocketConfig webSocketConfig) {
+    this.webSocketConfig = webSocketConfig;
+  }
 
   public OrderBookResponse getOrderBook() {
     return orderBook;
@@ -56,9 +63,9 @@ public class OrderBookService {
 
   public void updateOrderBookFromWebSocket(JsonNode root) {
     try {
-      long u = root.get("u").asLong();    // Final update ID in event
-      long U = root.get("U").asLong();    // First update ID in event
-      long pu = root.get("pu").asLong();  // Final update Id in last stream(ie `u` in last stream)
+      long u = root.get("u").asLong(); // Final update ID in event
+      long U = root.get("U").asLong(); // First update ID in event
+      long pu = root.get("pu").asLong(); // Final update Id in last stream(ie `u` in last stream)
 
       if (isOutOfDate(u)) {
         log.debug("u({}) < lastUpdateId({})", u, lastUpdateId);
@@ -101,6 +108,7 @@ public class OrderBookService {
   }
 
   private OrderBookResponse processAndFill(OrderBookResponse snapshot) {
+
     lastUpdateId = snapshot.lastUpdateId();
     previousUpdateId = 0;
 
@@ -216,12 +224,24 @@ public class OrderBookService {
   }
 
   private OrderBookResponse getFromBinance() {
-    ResponseEntity<OrderBookResponse> response =
-        restTemplate.exchange(
-            ORDER_BOOK_URL,
-            HttpMethod.GET,
-            HttpEntity.EMPTY,
-            new ParameterizedTypeReference<>() {});
+    ResponseEntity<OrderBookResponse> response = null;
+    try {
+      response =
+          restTemplate.exchange(
+              webSocketConfig.getBinanceHttpUrl(),
+              HttpMethod.GET,
+              HttpEntity.EMPTY,
+              new ParameterizedTypeReference<>() {});
+    } catch (RestClientException e) {
+      // Log the error message before shutting down
+      log.error(
+          "Error occurred while fetching data from Binance: {} | Error: {}",
+          webSocketConfig.getBinanceHttpUrl(),
+          e.getMessage());
+      // Shut down the application
+      System.exit(1);
+    }
+    log.info("Fetched OrderBook from : {}", webSocketConfig.getBinanceHttpUrl());
     return response.getBody();
   }
 }

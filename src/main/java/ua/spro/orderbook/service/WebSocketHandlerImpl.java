@@ -10,6 +10,7 @@ import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.WebSocketHandler;
 import org.springframework.web.socket.WebSocketMessage;
 import org.springframework.web.socket.WebSocketSession;
+import ua.spro.orderbook.config.WebSocketConfig;
 
 public class WebSocketHandlerImpl implements WebSocketHandler {
 
@@ -17,17 +18,22 @@ public class WebSocketHandlerImpl implements WebSocketHandler {
   private final OrderBookService orderBookService;
   private final ObjectMapper objectMapper;
   private final Runnable reconnect;
+  private final WebSocketConfig webSocketConfig;
 
   public WebSocketHandlerImpl(
-      OrderBookService orderBookService, ObjectMapper objectMapper, @Lazy Runnable reconnect) {
+      OrderBookService orderBookService,
+      ObjectMapper objectMapper,
+      @Lazy WebSocketConfig webSocketConfig,
+      @Lazy Runnable reconnect) {
     this.orderBookService = orderBookService;
     this.objectMapper = objectMapper;
+    this.webSocketConfig = webSocketConfig;
     this.reconnect = reconnect;
   }
 
   @Override
   public void afterConnectionEstablished(@NonNull WebSocketSession session) {
-    log.info("Connected to Binance WebSocket.");
+    log.info("Connected to Binance WebSocket : {}", webSocketConfig.getBinanceWsUrl());
     orderBookService.initializeOrderBookFromHttp();
   }
 
