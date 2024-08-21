@@ -41,40 +41,12 @@ public class OrderBookService {
   public OrderBookResponse getLatestOrderBook() {
     return latestOrderBook;
   }
-  
+
   public void initializeOrderBook() {
     OrderBookResponse snapshot = getFromBinance();
     if (snapshot != null) {
-      lastUpdateId = snapshot.lastUpdateId();
-      previousUpdateId = 0;
 
-      String symbol = snapshot.symbol();
-      String pair = snapshot.pair();
-
-      // Convert bids and asks JsonNode to List<List<String>>
-      List<List<String>> bids = convertJsonNodeToListOfLists(snapshot.bids());
-      List<List<String>> asks = convertJsonNodeToListOfLists(snapshot.asks());
-
-      // Initialize the bids and asks maps
-      bidsMap.clear();
-      asksMap.clear();
-
-      bids.forEach(bid -> bidsMap.put(bid.getFirst(), bid.get(1)));
-      asks.forEach(ask -> asksMap.put(ask.getFirst(), ask.get(1)));
-
-      // Convert the map to list of lists using streams
-      List<List<String>> bidsList = getBidsListFromMap();
-      List<List<String>> asksList = getAsksListFromMap();
-
-      JsonNode bidsNode = objectMapper.valueToTree(bidsList);
-      JsonNode asksNode = objectMapper.valueToTree(asksList);
-
-      long messageTime;
-      long transactionTime = messageTime = System.currentTimeMillis();
-
-      latestOrderBook =
-          new OrderBookResponse(
-              lastUpdateId, messageTime, transactionTime, symbol, pair, bidsNode, asksNode);
+      latestOrderBook = processAndFill(snapshot);
 
       log.info("Order book initialized with snapshot: {}", latestOrderBook);
     } else {
@@ -82,26 +54,25 @@ public class OrderBookService {
     }
   }
 
-
   public void updateOrderBookFromWebSocket(JsonNode root) {
     try {
-      long u = root.get("u").asLong();
-      long U = root.get("U").asLong();
-      long pu = root.get("pu").asLong();
+      long u = root.get("u").asLong();    // Final update ID in event
+      long U = root.get("U").asLong();    // First update ID in event
+      long pu = root.get("pu").asLong();  // Final update Id in last stream(ie `u` in last stream)
 
-      if (u < lastUpdateId) {
+      if (isOutOfDate(u)) {
         log.debug("u({}) < lastUpdateId({})", u, lastUpdateId);
         return;
       }
 
-      if (previousUpdateId != 0 && pu != previousUpdateId) {
+      if (hasMissingMessages(pu)) {
         log.debug("pu({}) != previousUpdateId({})", pu, previousUpdateId);
         initializeOrderBook();
         return;
       }
 
-      if (previousUpdateId == 0) {
-        if (U <= lastUpdateId) {
+      if (isFirstProcessedEvent()) {
+        if (isNewMessage(U)) {
           log.debug("U({}) <= lastUpdateId({})", U, lastUpdateId);
           processEvent(root);
         }
@@ -112,11 +83,58 @@ public class OrderBookService {
       log.error("Failed to update order book", e);
     }
   }
-  
+
+  private boolean isNewMessage(long U) {
+    return U <= lastUpdateId;
+  }
+
+  private boolean isFirstProcessedEvent() {
+    return previousUpdateId == 0;
+  }
+
+  private boolean hasMissingMessages(long pu) {
+    return previousUpdateId != 0 && pu != previousUpdateId;
+  }
+
+  private boolean isOutOfDate(long u) {
+    return u < lastUpdateId;
+  }
+
+  private OrderBookResponse processAndFill(OrderBookResponse snapshot) {
+    lastUpdateId = snapshot.lastUpdateId();
+    previousUpdateId = 0;
+
+    String symbol = snapshot.symbol();
+    String pair = snapshot.pair();
+
+    List<List<String>> bids = convertJsonNodeToListOfLists(snapshot.bids());
+    List<List<String>> asks = convertJsonNodeToListOfLists(snapshot.asks());
+
+    // Initialize the bids and asks maps
+    bidsMap.clear();
+    asksMap.clear();
+
+    bids.forEach(bid -> bidsMap.put(bid.getFirst(), bid.get(1)));
+    asks.forEach(ask -> asksMap.put(ask.getFirst(), ask.get(1)));
+
+    // Convert the map to list of lists
+    List<List<String>> bidsList = getBidsListFromMap();
+    List<List<String>> asksList = getAsksListFromMap();
+
+    JsonNode bidsNode = objectMapper.valueToTree(bidsList);
+    JsonNode asksNode = objectMapper.valueToTree(asksList);
+
+    long messageTime;
+    long transactionTime = messageTime = System.currentTimeMillis();
+
+    return new OrderBookResponse(
+        lastUpdateId, messageTime, transactionTime, symbol, pair, bidsNode, asksNode);
+  }
+
   private List<List<String>> convertJsonNodeToListOfLists(JsonNode jsonNode) {
     return objectMapper.convertValue(jsonNode, new TypeReference<>() {});
   }
-  
+
   private void processEvent(JsonNode root) {
     try {
       String symbol = root.get("s").asText();
@@ -150,7 +168,10 @@ public class OrderBookService {
 
   private List<List<String>> getBidsListFromMap() {
     return bidsMap.entrySet().stream()
-        .sorted((entry1, entry2) -> Double.compare(Double.parseDouble(entry2.getKey()), Double.parseDouble(entry1.getKey())))
+        .sorted(
+            (entry1, entry2) ->
+                Double.compare(
+                    Double.parseDouble(entry2.getKey()), Double.parseDouble(entry1.getKey())))
         .map(entry -> List.of(entry.getKey(), entry.getValue()))
         .collect(Collectors.toList());
   }
@@ -185,7 +206,6 @@ public class OrderBookService {
     log.debug("Removed {} level at price: {}", type, price);
   }
 
-  
   private void updateOrderBookLevel(String price, String quantity, String type) {
     if (type.equals(BID)) {
       bidsMap.put(price, quantity);
@@ -194,7 +214,6 @@ public class OrderBookService {
     }
     log.debug("Updated {} level at price: {}, quantity: {}", type, price, quantity);
   }
-
 
   private OrderBookResponse getFromBinance() {
     ResponseEntity<OrderBookResponse> response =
