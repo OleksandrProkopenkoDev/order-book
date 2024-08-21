@@ -30,7 +30,7 @@ public class OrderBookService {
   private final RestTemplate restTemplate = new RestTemplate();
   private final ObjectMapper objectMapper = new ObjectMapper();
 
-  private OrderBookResponse latestOrderBook;
+  private OrderBookResponse orderBook;
   private long lastUpdateId;
   private long previousUpdateId = 0;
 
@@ -38,17 +38,17 @@ public class OrderBookService {
   private final Map<String, String> bidsMap = new HashMap<>();
   private final Map<String, String> asksMap = new HashMap<>();
 
-  public OrderBookResponse getLatestOrderBook() {
-    return latestOrderBook;
+  public OrderBookResponse getOrderBook() {
+    return orderBook;
   }
 
-  public void initializeOrderBook() {
+  public void initializeOrderBookFromHttp() {
     OrderBookResponse snapshot = getFromBinance();
     if (snapshot != null) {
 
-      latestOrderBook = processAndFill(snapshot);
+      orderBook = processAndFill(snapshot);
 
-      log.info("Order book initialized with snapshot: {}", latestOrderBook);
+      log.info("Order book initialized with snapshot: {}", orderBook);
     } else {
       log.error("Failed to retrieve order book snapshot.");
     }
@@ -67,7 +67,7 @@ public class OrderBookService {
 
       if (hasMissingMessages(pu)) {
         log.debug("pu({}) != previousUpdateId({})", pu, previousUpdateId);
-        initializeOrderBook();
+        initializeOrderBookFromHttp();
         return;
       }
 
@@ -156,11 +156,11 @@ public class OrderBookService {
       JsonNode bidsNode = objectMapper.valueToTree(bidsList);
       JsonNode asksNode = objectMapper.valueToTree(asksList);
 
-      latestOrderBook =
+      orderBook =
           new OrderBookResponse(
               previousUpdateId, messageTime, transactionTime, symbol, pair, bidsNode, asksNode);
 
-      log.info("Order book updated: {}", latestOrderBook);
+      log.info("Order book updated: {}", orderBook);
     } catch (Exception e) {
       log.error("Failed to process event", e);
     }

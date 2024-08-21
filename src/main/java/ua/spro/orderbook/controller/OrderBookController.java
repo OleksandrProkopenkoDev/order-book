@@ -20,6 +20,6 @@ public class OrderBookController {
 
   @GetMapping
   public OrderBookResponse getOrderBook() {
-    return orderBookService.getLatestOrderBook();
+    return orderBookService.getOrderBook();
   }
 }

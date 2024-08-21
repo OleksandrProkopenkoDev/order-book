@@ -28,7 +28,7 @@ public class WebSocketHandlerImpl implements WebSocketHandler {
   @Override
   public void afterConnectionEstablished(@NonNull WebSocketSession session) {
     log.info("Connected to Binance WebSocket.");
-    orderBookService.initializeOrderBook();
+    orderBookService.initializeOrderBookFromHttp();
   }
 
   @Override
