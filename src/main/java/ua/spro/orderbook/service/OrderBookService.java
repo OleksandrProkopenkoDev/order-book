@@ -28,6 +28,7 @@ public class OrderBookService {
 
   public static final String BID = "bid";
   public static final String ASK = "ask";
+  public static final int MAX_LIMIT = 1000;
   private final RestTemplate restTemplate = new RestTemplate();
   private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -45,8 +46,8 @@ public class OrderBookService {
     this.webSocketConfig = webSocketConfig;
   }
 
-  public OrderBookResponse getOrderBook() {
-    return orderBook;
+  public OrderBookResponse getOrderBook(int limit) {
+    return limitOrderBook(limit);
   }
 
   public void initializeOrderBookFromHttp() {
@@ -126,8 +127,8 @@ public class OrderBookService {
     asks.forEach(ask -> asksMap.put(ask.getFirst(), ask.get(1)));
 
     // Convert the map to list of lists
-    List<List<String>> bidsList = getBidsListFromMap();
-    List<List<String>> asksList = getAsksListFromMap();
+    List<List<String>> bidsList = getBidsListFromMap(MAX_LIMIT);
+    List<List<String>> asksList = getAsksListFromMap(MAX_LIMIT);
 
     JsonNode bidsNode = objectMapper.valueToTree(bidsList);
     JsonNode asksNode = objectMapper.valueToTree(asksList);
@@ -158,8 +159,8 @@ public class OrderBookService {
       updateOrderBookLevels(asks, ASK);
 
       // Convert the map to list of lists
-      List<List<String>> bidsList = getBidsListFromMap();
-      List<List<String>> asksList = getAsksListFromMap();
+      List<List<String>> bidsList = getBidsListFromMap(MAX_LIMIT);
+      List<List<String>> asksList = getAsksListFromMap(MAX_LIMIT);
 
       JsonNode bidsNode = objectMapper.valueToTree(bidsList);
       JsonNode asksNode = objectMapper.valueToTree(asksList);
@@ -174,19 +175,39 @@ public class OrderBookService {
     }
   }
 
-  private List<List<String>> getBidsListFromMap() {
+  private OrderBookResponse limitOrderBook(int limit) {
+    // Limit the number of records in bids and asks lists
+    List<List<String>> limitedBids = getBidsListFromMap(limit);
+    List<List<String>> limitedAsks = getAsksListFromMap(limit);
+
+    JsonNode limitedBidsNode = objectMapper.valueToTree(limitedBids);
+    JsonNode limitedAsksNode = objectMapper.valueToTree(limitedAsks);
+
+    // Construct a new OrderBookResponse with the limited bids and asks
+    return new OrderBookResponse(
+        orderBook.lastUpdateId(),
+        orderBook.E(),
+        orderBook.T(),
+        orderBook.symbol(),
+        orderBook.pair(),
+        limitedBidsNode,
+        limitedAsksNode
+    );
+  }
+
+  // Helper methods to apply the limit
+  private List<List<String>> getBidsListFromMap(int limit) {
     return bidsMap.entrySet().stream()
-        .sorted(
-            (entry1, entry2) ->
-                Double.compare(
-                    Double.parseDouble(entry2.getKey()), Double.parseDouble(entry1.getKey())))
+        .sorted((entry1, entry2) -> Double.compare(Double.parseDouble(entry2.getKey()), Double.parseDouble(entry1.getKey())))
+        .limit(limit)  // Apply limit here
         .map(entry -> List.of(entry.getKey(), entry.getValue()))
         .collect(Collectors.toList());
   }
 
-  private List<List<String>> getAsksListFromMap() {
+  private List<List<String>> getAsksListFromMap(int limit) {
     return asksMap.entrySet().stream()
         .sorted(Comparator.comparingDouble(entry -> Double.parseDouble(entry.getKey())))
+        .limit(limit)  // Apply limit here
         .map(entry -> List.of(entry.getKey(), entry.getValue()))
         .collect(Collectors.toList());
   }
